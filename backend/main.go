@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
@@ -38,6 +39,17 @@ func CheckDBConnection() gin.HandlerFunc { //g.HandlerFunc is gin's middleware d
 }
 
 func postUsers(c *gin.Context) {
+	var newUser user
+	if err := c.BindJSON(&newUser); err != nil {
+		return
+	}
+	_, err := db.Exec("INSERT INTO users (username) VALUES ($1)", newUser.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert user data."})
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, newUser.Username)
 }
 
 func getPosts(c *gin.Context) {
@@ -85,6 +97,7 @@ func main() {
 	fmt.Printf("version=%s\n", version)
 
 	router := gin.Default()
+	router.Use((cors.Default()))
 	router.GET("/posts", CheckDBConnection(), getPosts)
 	router.POST("/users", CheckDBConnection(), postUsers)
 	router.Run("127.0.0.1:8080")
