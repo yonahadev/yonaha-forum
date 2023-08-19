@@ -24,15 +24,23 @@ type post struct {
 	User  user   `json:"user"`
 }
 
-func getPosts(c *gin.Context) {
-
-	if db == nil {
-		fmt.Println("failed to establish a db connection")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to establish a database connection.",
-		})
-		return
+func CheckDBConnection() gin.HandlerFunc { //g.HandlerFunc is gin's middleware denotion
+	return func(c *gin.Context) {
+		if db == nil {
+			fmt.Println("failed to establish a db connection")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to establish a database connection.",
+			})
+			return
+		}
+		c.Next() //continues to next middleware/actual function
 	}
+}
+
+func postUsers(c *gin.Context) {
+}
+
+func getPosts(c *gin.Context) {
 
 	rows, err := db.Query("SELECT p.id, p.title, u.id AS user_id, u.username FROM posts p JOIN users u ON p.user_id = u.id")
 	if err != nil {
@@ -77,6 +85,7 @@ func main() {
 	fmt.Printf("version=%s\n", version)
 
 	router := gin.Default()
-	router.GET("/posts", getPosts)
+	router.GET("/posts", CheckDBConnection(), getPosts)
+	router.POST("/users", CheckDBConnection(), postUsers)
 	router.Run("127.0.0.1:8080")
 }
