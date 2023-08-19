@@ -1,3 +1,4 @@
+import { Post } from "@/interfaces";
 import Link from "next/link";
 
 const getPosts = async (): Promise<Post[]> => {
@@ -8,17 +9,6 @@ const getPosts = async (): Promise<Post[]> => {
 
   return res.json();
 };
-
-interface User {
-  id: number;
-  username: string;
-}
-
-interface Post {
-  id: number;
-  title: string;
-  user: User;
-}
 
 export default async function Home() {
   const posts = await getPosts();
@@ -33,6 +23,7 @@ export default async function Home() {
         </>
       ))}
       <Link href={"/signup"}>Sign Up</Link>
+      <Link href={"/users"}>Users</Link>
     </main>
   );
 }
