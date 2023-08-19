@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const getPosts = async (): Promise<Post[]> => {
   const res = await fetch("http://127.0.0.1:8080/posts");
   if (!res.ok) {
@@ -27,8 +29,10 @@ export default async function Home() {
       {posts.map((post) => (
         <>
           <p>{post.title}</p>
+          <p>Posted by {post.user.username}</p>
         </>
       ))}
+      <Link href={"/signup"}>Sign Up</Link>
     </main>
   );
 }
