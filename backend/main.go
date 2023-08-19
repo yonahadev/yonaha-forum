@@ -52,6 +52,27 @@ func postUsers(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, newUser.Username)
 }
 
+func getUsers(c *gin.Context) {
+
+	rows, err := db.Query("SELECT u.id,u.username FROM users u")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	users := []user{}
+	for rows.Next() {
+		u := user{}
+		err := rows.Scan(&u.ID, &u.Username)
+		if err != nil {
+			log.Fatal(err)
+		}
+		users = append(users, u)
+	}
+
+	c.IndentedJSON(http.StatusOK, users)
+}
+
 func getPosts(c *gin.Context) {
 
 	rows, err := db.Query("SELECT p.id, p.title, u.id AS user_id, u.username FROM posts p JOIN users u ON p.user_id = u.id")
@@ -100,5 +121,6 @@ func main() {
 	router.Use((cors.Default()))
 	router.GET("/posts", CheckDBConnection(), getPosts)
 	router.POST("/users", CheckDBConnection(), postUsers)
+	router.GET("/users", CheckDBConnection(), getUsers)
 	router.Run("127.0.0.1:8080")
 }
