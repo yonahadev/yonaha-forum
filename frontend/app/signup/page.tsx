@@ -1,7 +1,9 @@
 "use client";
+import { useState } from "react";
 import { FieldValues, useForm } from "react-hook-form";
 
 const page = () => {
+  const [response, setResponse] = useState(0);
   const { register, handleSubmit } = useForm();
   const onSubmit = async (data: FieldValues) => {
     const response = await fetch("http://127.0.0.1:8080/users", {
@@ -12,7 +14,8 @@ const page = () => {
       },
     });
     const result = await response.json();
-    console.log(`${result} account added`);
+    const status = response.status;
+    setResponse(status);
   };
 
   return (
@@ -22,6 +25,13 @@ const page = () => {
         <input {...register("username")} placeholder="enter username"></input>
         <input type="submit" />
       </form>
+      {response != 0 ? (
+        <p>
+          {response === 200
+            ? "Successfuly added account"
+            : `Error code ${response}`}
+        </p>
+      ) : null}
     </div>
   );
 };

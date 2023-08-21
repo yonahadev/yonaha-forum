@@ -46,7 +46,6 @@ func postUsers(c *gin.Context) {
 	_, err := db.Exec("INSERT INTO users (username) VALUES ($1)", newUser.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert user data."})
-		return
 	}
 
 	c.IndentedJSON(http.StatusOK, newUser.Username)
