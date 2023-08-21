@@ -20,7 +20,7 @@ const page = () => {
 
   return (
     <div>
-      Create an account!
+      Sign in
       <form onSubmit={handleSubmit(onSubmit)}>
         <input {...register("username")} placeholder="enter username"></input>
         <input {...register("password")} placeholder="enter password"></input>
@@ -29,7 +29,7 @@ const page = () => {
       {response != 0 ? (
         <p>
           {response === 200
-            ? "Successfuly added account"
+            ? "Successfuly signed in"
             : `Error code ${response}`}
         </p>
       ) : null}
