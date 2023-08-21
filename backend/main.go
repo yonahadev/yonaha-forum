@@ -17,6 +17,7 @@ var err error
 type user struct {
 	ID       int    `json:"id"`
 	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type post struct {
@@ -38,24 +39,53 @@ func CheckDBConnection() gin.HandlerFunc { //g.HandlerFunc is gin's middleware d
 	}
 }
 
+func checkCredentials(c *gin.Context) {
+	var curUser user
+	if err := c.BindJSON(&curUser); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
+	}
+
+	var dbUser user
+	err := db.QueryRow("SELECT id, username, password FROM users WHERE id = $1", curUser.ID).
+		Scan(&dbUser.ID, &dbUser.Username, &dbUser.Password)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		}
+		return
+	}
+
+	// Now, you can compare the hashed password from dbUser with the password from curUser.
+	// You should use a secure password hashing library for this comparison.
+
+	c.IndentedJSON(http.StatusOK, "Authenticated")
+}
+
 func postUsers(c *gin.Context) {
 	var newUser user
 	if err := c.BindJSON(&newUser); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
 		return
 	}
-	_, err := db.Exec("INSERT INTO users (username) VALUES ($1)", newUser.Username)
+	_, err := db.Exec("INSERT INTO users (username,password) VALUES ($1)", newUser.Username, newUser.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert user data."})
+
+		return
 	}
 
-	c.IndentedJSON(http.StatusOK, newUser.Username)
+	c.IndentedJSON(http.StatusOK, "Added user")
 }
 
 func getUsers(c *gin.Context) {
-
-	rows, err := db.Query("SELECT u.id,u.username FROM users u")
+	rows, err := db.Query("SELECT u.id, u.username FROM users u")
 	if err != nil {
-		log.Fatal(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
 	}
 	defer rows.Close()
 
@@ -64,7 +94,8 @@ func getUsers(c *gin.Context) {
 		u := user{}
 		err := rows.Scan(&u.ID, &u.Username)
 		if err != nil {
-			log.Fatal(err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
 		}
 		users = append(users, u)
 	}
@@ -76,7 +107,8 @@ func getPosts(c *gin.Context) {
 
 	rows, err := db.Query("SELECT p.id, p.title, u.id AS user_id, u.username FROM posts p JOIN users u ON p.user_id = u.id")
 	if err != nil {
-		log.Fatal(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
 	}
 	defer rows.Close()
 
@@ -85,7 +117,8 @@ func getPosts(c *gin.Context) {
 		p := post{}
 		err := rows.Scan(&p.ID, &p.Title, &p.User.ID, &p.User.Username)
 		if err != nil {
-			log.Fatal(err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
 		}
 		posts = append(posts, p)
 	}
@@ -121,5 +154,6 @@ func main() {
 	router.GET("/posts", CheckDBConnection(), getPosts)
 	router.POST("/users", CheckDBConnection(), postUsers)
 	router.GET("/users", CheckDBConnection(), getUsers)
+	router.POST("users/signin", CheckDBConnection(), checkCredentials)
 	router.Run("127.0.0.1:8080")
 }
