@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 )
 
@@ -47,7 +48,7 @@ func checkCredentials(c *gin.Context) {
 	}
 
 	var dbUser user
-	err := db.QueryRow("SELECT id, username, password FROM users WHERE id = $1", curUser.ID).
+	err := db.QueryRow("SELECT id, username, password FROM users WHERE username = ($1)", curUser.Username).
 		Scan(&dbUser.ID, &dbUser.Username, &dbUser.Password)
 
 	if err != nil {
@@ -59,10 +60,14 @@ func checkCredentials(c *gin.Context) {
 		return
 	}
 
+	if dbUser.Password != curUser.Password {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect password"})
+		return
+	}
 	// Now, you can compare the hashed password from dbUser with the password from curUser.
 	// You should use a secure password hashing library for this comparison.
 
-	c.IndentedJSON(http.StatusOK, "Authenticated")
+	c.IndentedJSON(http.StatusOK, gin.H{"message": "Signed in"})
 }
 
 func postUsers(c *gin.Context) {
@@ -71,14 +76,17 @@ func postUsers(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
 		return
 	}
-	_, err := db.Exec("INSERT INTO users (username,password) VALUES ($1)", newUser.Username, newUser.Password)
+	_, err := db.Exec("INSERT INTO users (username,password) VALUES ($1,$2)", newUser.Username, newUser.Password)
 	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert user data."})
-
 		return
 	}
 
-	c.IndentedJSON(http.StatusOK, "Added user")
+	c.IndentedJSON(http.StatusOK, gin.H{"message": "Added user"})
 }
 
 func getUsers(c *gin.Context) {

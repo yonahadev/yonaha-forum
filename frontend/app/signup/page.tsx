@@ -1,9 +1,10 @@
 "use client";
+import { ApiResponse } from "@/interfaces";
 import { useState } from "react";
 import { FieldValues, useForm } from "react-hook-form";
 
 const page = () => {
-  const [response, setResponse] = useState(0);
+  const [response, setResponse] = useState<ApiResponse | null>();
   const { register, handleSubmit } = useForm();
   const onSubmit = async (data: FieldValues) => {
     const response = await fetch("http://127.0.0.1:8080/users", {
@@ -13,9 +14,9 @@ const page = () => {
         "Content-Type": "application/json",
       },
     });
-    const result = await response.json();
-    const status = response.status;
-    setResponse(status);
+    const responseData: ApiResponse = await response.json();
+    setResponse(responseData);
+    console.log(responseData);
   };
 
   return (
@@ -26,13 +27,8 @@ const page = () => {
         <input {...register("password")} placeholder="enter password"></input>
         <input type="submit" />
       </form>
-      {response != 0 ? (
-        <p>
-          {response === 200
-            ? "Successfuly added account"
-            : `Error code ${response}`}
-        </p>
-      ) : null}
+      <p>{response?.error}</p>
+      <p>{response?.message}</p>
     </div>
   );
 };
