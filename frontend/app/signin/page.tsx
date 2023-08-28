@@ -1,5 +1,6 @@
 "use client";
 import { ApiResponse } from "@/interfaces";
+import Cookies from "js-cookie";
 import { useState } from "react";
 import { FieldValues, useForm } from "react-hook-form";
 
@@ -16,6 +17,11 @@ const page = () => {
     });
     const responseData: ApiResponse = await response.json();
     setResponse(responseData);
+    console.log(responseData);
+    if (responseData.token) {
+      Cookies.set("jwtToken", responseData.token!, { httpOnly: true });
+      console.log("setCookie");
+    }
   };
 
   return (
@@ -26,7 +32,7 @@ const page = () => {
         <input {...register("password")} placeholder="enter password"></input>
         <input type="submit" />
       </form>
-      <p>{`error: ${response?.error}`}</p>
+      <p>{response?.error}</p>
       <p>{response?.message}</p>
     </div>
   );

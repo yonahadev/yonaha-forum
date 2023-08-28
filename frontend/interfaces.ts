@@ -13,4 +13,5 @@ export interface Post {
 export interface ApiResponse {
   error?: string;
   message?: string;
+  token?: string;
 }
