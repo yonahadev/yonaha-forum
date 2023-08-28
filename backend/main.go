@@ -2,14 +2,17 @@ package main
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 	"github.com/lib/pq"
-	_ "github.com/lib/pq"
 )
 
 var db *sql.DB
@@ -64,10 +67,28 @@ func checkCredentials(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect password"})
 		return
 	}
+
+	var (
+		key []byte
+		t   *jwt.Token
+		s   string
+	)
+
+	hexKey := os.Getenv("KEY")
+	key, err = hex.DecodeString(hexKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Server key error"})
+	}
+	t = jwt.New(jwt.SigningMethodHS256)
+	s, err = t.SignedString(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Server key error"})
+	}
+
 	// Now, you can compare the hashed password from dbUser with the password from curUser.
 	// You should use a secure password hashing library for this comparison.
 
-	c.IndentedJSON(http.StatusOK, gin.H{"message": "Signed in"})
+	c.IndentedJSON(http.StatusOK, gin.H{"message": "Signed in", "token": s})
 }
 
 func postUsers(c *gin.Context) {
@@ -135,7 +156,19 @@ func getPosts(c *gin.Context) {
 }
 
 func main() {
-	connStr := "user=yonahadev password=u6hzMbvCnJ7B dbname=neondb host=ep-royal-waterfall-74881687.eu-central-1.aws.neon.tech sslmode=verify-full"
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+	dbHost := os.Getenv("DB_HOST")
+	dbSSLMode := os.Getenv("DB_SSL_MODE")
+
+	// Construct your connection string
+	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=%s",
+		dbUser, dbPassword, dbName, dbHost, dbSSLMode)
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)
