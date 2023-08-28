@@ -8,19 +8,26 @@ const page = () => {
   const [response, setResponse] = useState<ApiResponse | null>();
   const { register, handleSubmit } = useForm();
   const onSubmit = async (data: FieldValues) => {
-    const response = await fetch("http://127.0.0.1:8080/users/signin", {
-      method: "POST",
-      body: JSON.stringify(data),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    const responseData: ApiResponse = await response.json();
-    setResponse(responseData);
-    console.log(responseData);
-    if (responseData.token) {
-      Cookies.set("jwtToken", responseData.token!, { httpOnly: true });
-      console.log("setCookie");
+    try {
+      const response = await fetch("http://127.0.0.1:8080/users/signin", {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const responseData: ApiResponse = await response.json();
+      if (response.ok) {
+        setResponse({ error: "", message: responseData.message! });
+        if (responseData.token) {
+          Cookies.set("jwtToken", responseData.token, { httpOnly: false });
+          console.log("Signed in");
+        }
+      } else {
+        setResponse({ error: responseData.error!, message: "" });
+      }
+    } catch (error) {
+      setResponse({ error: "Network Error", message: "" });
     }
   };
 

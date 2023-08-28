@@ -4,19 +4,27 @@ import { useState } from "react";
 import { FieldValues, useForm } from "react-hook-form";
 
 const page = () => {
-  const [response, setResponse] = useState<ApiResponse | null>();
+  const [response, setResponse] = useState({ error: "", message: "" });
   const { register, handleSubmit } = useForm();
   const onSubmit = async (data: FieldValues) => {
-    const response = await fetch("http://127.0.0.1:8080/users", {
-      method: "POST",
-      body: JSON.stringify(data),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    const responseData: ApiResponse = await response.json();
-    setResponse(responseData);
-    console.log(responseData);
+    try {
+      const response = await fetch("http://127.0.0.1:8080/users", {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const responseData: ApiResponse = await response.json();
+      if (response.ok) {
+        setResponse({ error: "", message: responseData.message! });
+      } else {
+        setResponse({ error: responseData.error!, message: "" });
+      }
+      console.log(responseData);
+    } catch (error) {
+      setResponse({ error: "Network Error", message: "" });
+    }
   };
 
   return (
