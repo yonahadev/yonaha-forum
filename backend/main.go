@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -19,15 +20,21 @@ var db *sql.DB
 var err error
 
 type user struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	ID       int     `json:"id"`
+	Username string  `json:"username"`
+	Password *string `json:"password"`
 }
 
 type post struct {
-	ID    int    `json:"id"`
-	Title string `json:"title"`
-	User  user   `json:"user"`
+	ID           int    `json:"id"`
+	Title        string `json:"title"`
+	Text_Content string `json:"text_content"`
+	User         user   `json:"user"`
+}
+
+type customClaims struct {
+	UserID int `json:"user_id"`
+	jwt.RegisteredClaims
 }
 
 func CheckDBConnection() gin.HandlerFunc { //g.HandlerFunc is gin's middleware denotion
@@ -41,6 +48,80 @@ func CheckDBConnection() gin.HandlerFunc { //g.HandlerFunc is gin's middleware d
 		}
 		c.Next() //continues to next middleware/actual function
 	}
+}
+
+func checkCookie(c *gin.Context) {
+	cookie, err := c.Cookie("jwtToken")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "Cookie not found"})
+		} else {
+			c.IndentedJSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		}
+		return // Return early when the cookie is not found or there's an error
+	}
+
+	// You can access the cookie value with cookie.Value
+	cookieValue := cookie
+	fmt.Println("Received cookie value:", cookieValue)
+
+	rawCookie, err := jwt.ParseWithClaims(cookieValue, &customClaims{}, func(token *jwt.Token) (interface{}, error) {
+		hexKey := os.Getenv("KEY")
+		key, _ := hex.DecodeString(hexKey)
+		return key, nil
+	})
+
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("error passing token %s", err)})
+		return
+	}
+
+	claims, ok := rawCookie.Claims.(*customClaims)
+	if !ok {
+		// Handle the case where the claims couldn't be cast to your custom claims struct
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "Invalid token claims"})
+		return
+	}
+
+	// Log the claims or perform any necessary actions with them
+	fmt.Println("User ID:", claims.UserID)
+	fmt.Println("Expiration Time:", claims.ExpiresAt)
+
+	var dbUser user
+	err = db.QueryRow("SELECT id, username FROM users WHERE id = ($1)", claims.UserID).
+		Scan(&dbUser.ID, &dbUser.Username)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		}
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, gin.H{"message": "Cookie-valid", "token": cookie, "user": dbUser})
+}
+
+func signOut(c *gin.Context) {
+	_, err := c.Cookie("jwtToken")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cookie not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		}
+		return
+	}
+	expiredCookie := &http.Cookie{
+		Name:     "jwtToken",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1, // This will instruct the browser to delete the cookie.
+		HttpOnly: true,
+	}
+
+	c.IndentedJSON(http.StatusOK, gin.H{"message": "Successfully logged out", "cookie": expiredCookie})
 }
 
 func checkCredentials(c *gin.Context) {
@@ -69,26 +150,37 @@ func checkCredentials(c *gin.Context) {
 	}
 
 	var (
-		key []byte
-		t   *jwt.Token
-		s   string
+		key         []byte
+		token       *jwt.Token
+		signedToken string
 	)
+
+	claims := customClaims{
+		UserID: dbUser.ID,
+	}
+	claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(time.Hour * 24))
+	claims.Issuer, _ = claims.GetIssuer()
 
 	hexKey := os.Getenv("KEY")
 	key, err = hex.DecodeString(hexKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Server key error"})
 	}
-	t = jwt.New(jwt.SigningMethodHS256)
-	s, err = t.SignedString(key)
+	token = jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
+	signedToken, err = token.SignedString(key)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Server key error"})
 	}
 
-	// Now, you can compare the hashed password from dbUser with the password from curUser.
-	// You should use a secure password hashing library for this comparison.
+	// cookie := http.Cookie{
+	// 	Name:     "jwtToken",
+	// 	Value:    signedToken,
+	// 	Expires:  time.Now().Add(time.Hour * 24), // Same expiration as in claims
+	// 	HttpOnly: true,
+	// }
+	// http.SetCookie(c.Writer, &cookie)
 
-	c.IndentedJSON(http.StatusOK, gin.H{"message": "Signed in", "token": s})
+	c.IndentedJSON(http.StatusOK, gin.H{"message": "Signed in", "token": signedToken})
 }
 
 func postUsers(c *gin.Context) {
@@ -107,13 +199,13 @@ func postUsers(c *gin.Context) {
 		return
 	}
 
-	c.IndentedJSON(http.StatusOK, gin.H{"message": "Added user"})
+	c.IndentedJSON(http.StatusCreated, gin.H{"message": "Added user"})
 }
 
 func getUsers(c *gin.Context) {
 	rows, err := db.Query("SELECT u.id, u.username FROM users u")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		c.IndentedJSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 	defer rows.Close()
@@ -123,7 +215,7 @@ func getUsers(c *gin.Context) {
 		u := user{}
 		err := rows.Scan(&u.ID, &u.Username)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			c.IndentedJSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return
 		}
 		users = append(users, u)
@@ -134,7 +226,7 @@ func getUsers(c *gin.Context) {
 
 func getPosts(c *gin.Context) {
 
-	rows, err := db.Query("SELECT p.id, p.title, u.id AS user_id, u.username FROM posts p JOIN users u ON p.user_id = u.id")
+	rows, err := db.Query("SELECT p.id, p.title,p.text_content, u.id AS user_id, u.username FROM posts p JOIN users u ON p.user_id = u.id")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -144,7 +236,7 @@ func getPosts(c *gin.Context) {
 	posts := []post{}
 	for rows.Next() {
 		p := post{}
-		err := rows.Scan(&p.ID, &p.Title, &p.User.ID, &p.User.Username)
+		err := rows.Scan(&p.ID, &p.Title, &p.Text_Content, &p.User.ID, &p.User.Username)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return
@@ -191,10 +283,17 @@ func main() {
 	fmt.Printf("version=%s\n", version)
 
 	router := gin.Default()
-	router.Use((cors.Default()))
-	router.GET("/posts", CheckDBConnection(), getPosts)
-	router.POST("/users", CheckDBConnection(), postUsers)
-	router.GET("/users", CheckDBConnection(), getUsers)
-	router.POST("users/signin", CheckDBConnection(), checkCredentials)
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://127.0.0.1:3000", "http://localhost:3000"}
+	config.AllowCredentials = true
+	router.Use(cors.New(config))
+	router.GET("/posts", getPosts)
+	router.POST("/users", postUsers)
+	router.GET("/users", getUsers)
+	router.POST("/users/signin", checkCredentials)
+	router.GET("/users/signout", signOut)
+	router.GET("/cookie-test", checkCookie)
+	router.Use(CheckDBConnection())
+
 	router.Run("127.0.0.1:8080")
 }
