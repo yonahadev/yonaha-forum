@@ -10,6 +10,7 @@ const Navbar = () => {
         yonahaforum
       </Link>
       <Link href={"/users"}>Users</Link>
+      <Link href={"/createpost"}>Create a post</Link>
       <div className="w-1/2 h-3/4 bg-transparent bg-gray-300 px-2 flex items-center">
         <AiOutlineSearch size="20" />
         <input className="bg-transparent w-full h-full px-2 outline-none"></input>

@@ -93,7 +93,41 @@ func validateToken(c *gin.Context) (*int, error) {
 	return &claims.UserID, nil
 }
 
+func updatePosts(c *gin.Context) {
+	userID, err := validateToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if userID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found"})
+		return
+	}
+	var updatedPost post
+	if err := c.BindJSON(&updatedPost); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
+	}
+	_, err = db.Exec("UPDATE posts SET title = ($1), text_content = ($2) WHERE id = ($3)", updatedPost.Title, updatedPost.Text_Content, updatedPost.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Couldn't update post"})
+		return
+	}
+
+	c.IndentedJSON(http.StatusCreated, gin.H{"message": "Updated Post"})
+
+}
+
 func deletePosts(c *gin.Context) {
+	userID, err := validateToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if userID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found"})
+		return
+	}
 	var curPost post
 	if err := c.BindJSON(&curPost); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
@@ -106,7 +140,6 @@ func deletePosts(c *gin.Context) {
 	}
 
 	c.IndentedJSON(http.StatusCreated, gin.H{"message": "Deleted post"})
-
 }
 
 func createPosts(c *gin.Context) {
@@ -330,6 +363,7 @@ func main() {
 	router.GET("/posts", getPosts)
 	router.POST("/posts", createPosts)
 	router.DELETE("/posts", deletePosts)
+	router.PATCH("/posts", updatePosts)
 	router.POST("/users", postUsers)
 	router.GET("/users", getUsers)
 	router.POST("/users/signin", checkCredentials)

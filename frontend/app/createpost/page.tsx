@@ -1,5 +1,6 @@
 "use client";
 import { ApiResponse } from "@/interfaces";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FieldValues, useForm } from "react-hook-form";
 import useAuth from "../hooks/useAuth";
@@ -7,6 +8,8 @@ import useAuth from "../hooks/useAuth";
 const page = () => {
   const [response, setResponse] = useState({ error: "", message: "" });
   const { register, handleSubmit } = useForm();
+  const router = useRouter();
+
   const onSubmit = async (data: FieldValues) => {
     try {
       const response = await fetch("http://127.0.0.1:8080/posts", {
@@ -20,7 +23,8 @@ const page = () => {
       const responseData: ApiResponse = await response.json();
       if (response.ok) {
         setResponse({ error: "", message: responseData.message! });
-        location.replace("/");
+        router.push("/");
+        router.refresh();
       } else {
         setResponse({ error: responseData.error!, message: "" });
       }
