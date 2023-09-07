@@ -93,6 +93,45 @@ func validateToken(c *gin.Context) (*int, error) {
 	return &claims.UserID, nil
 }
 
+func deletePosts(c *gin.Context) {
+	var curPost post
+	if err := c.BindJSON(&curPost); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
+	}
+	_, err = db.Exec("DELETE FROM posts where posts.id = ($1)", curPost.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Couldn't delete post"})
+		return
+	}
+
+	c.IndentedJSON(http.StatusCreated, gin.H{"message": "Deleted post"})
+
+}
+
+func createPosts(c *gin.Context) {
+	userID, err := validateToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	if userID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found"})
+		return
+	}
+	var newPost post
+	if err := c.BindJSON(&newPost); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
+	}
+	_, err = db.Exec("INSERT INTO posts (title,text_content,user_id) VALUES ($1,$2,$3)", newPost.Title, newPost.Text_Content, userID)
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "could not create post"})
+	}
+
+	c.IndentedJSON(http.StatusCreated, gin.H{"message": "Added Post"})
+}
+
 func requestUser(c *gin.Context) {
 	userID, err := validateToken(c)
 	if err != nil {
@@ -147,7 +186,7 @@ func checkCredentials(c *gin.Context) {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect credentials"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		}
@@ -155,7 +194,7 @@ func checkCredentials(c *gin.Context) {
 	}
 
 	if dbUser.Password != curUser.Password {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect password"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect credentials"})
 		return
 	}
 
@@ -260,7 +299,6 @@ func main() {
 	dbHost := os.Getenv("DB_HOST")
 	dbSSLMode := os.Getenv("DB_SSL_MODE")
 
-	// Construct your connection string
 	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=%s",
 		dbUser, dbPassword, dbName, dbHost, dbSSLMode)
 	db, err = sql.Open("postgres", connStr)
@@ -290,6 +328,8 @@ func main() {
 	config.AllowCredentials = true
 	router.Use(cors.New(config))
 	router.GET("/posts", getPosts)
+	router.POST("/posts", createPosts)
+	router.DELETE("/posts", deletePosts)
 	router.POST("/users", postUsers)
 	router.GET("/users", getUsers)
 	router.POST("/users/signin", checkCredentials)
