@@ -1,11 +1,12 @@
 "use client";
 import { ApiResponse } from "@/interfaces";
 import Cookies from "js-cookie";
+import Link from "next/link";
 import { useState } from "react";
 import { FieldValues, useForm } from "react-hook-form";
 
 const page = () => {
-  const [response, setResponse] = useState<ApiResponse | null>();
+  const [response, setResponse] = useState({ error: "", message: "" });
   const { register, handleSubmit } = useForm();
   const onSubmit = async (data: FieldValues) => {
     try {
@@ -20,8 +21,13 @@ const page = () => {
       if (response.ok) {
         setResponse({ error: "", message: responseData.message! });
         if (responseData.token) {
-          Cookies.set("jwtToken", responseData.token, { httpOnly: false });
+          Cookies.set("jwtToken", responseData.token, {
+            httpOnly: false,
+            expires: new Date(responseData.tokenExpiry!),
+          });
+
           console.log("Signed in");
+          location.replace("/");
         }
       } else {
         setResponse({ error: responseData.error!, message: "" });
@@ -41,6 +47,10 @@ const page = () => {
       </form>
       <p>{response?.error}</p>
       <p>{response?.message}</p>
+      Don't have an account?{" "}
+      <Link className="text-blue-600 underline" href={"/signup"}>
+        Sign Up
+      </Link>
     </div>
   );
 };

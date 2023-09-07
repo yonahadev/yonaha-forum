@@ -2,8 +2,11 @@ import { User } from "@/interfaces";
 import Link from "next/link";
 
 const getUsers = async (): Promise<User[]> => {
-  const res = await fetch("http://127.0.0.1:8080/users", { method: "GET" });
+  const res = await fetch("http://127.0.0.1:8080/users", {
+    method: "GET",
+  });
   if (!res.ok) {
+    console.error("Fetch failed:", res.statusText);
     throw new Error("fetch failed");
   }
   return res.json();
