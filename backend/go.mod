@@ -1,4 +1,4 @@
-module example/yonaha-forum-backend
+module forum
 
 go 1.20
 
